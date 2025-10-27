@@ -1,0 +1,29 @@
+{
+  "name": "bundle-buy-bliss-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "api/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node api/index.js",
+    "dev": "nodemon api/index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.76.1",
+    "axios": "^1.6.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "ngrok": "^5.0.0-beta.2",
+    "nodemailer": "^7.0.5",
+    "qs": "^6.14.0",
+    "sha256": "^0.2.0",
+    "uniqid": "^5.4.0"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}
