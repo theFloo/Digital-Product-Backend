@@ -14,7 +14,7 @@ class PhonePeAPIService {
       process.env.PHONEPE_CLIENT_SECRET || "test-client-secret";
     this.clientVersion =
       process.env.PHONEPE_CLIENT_VERSION || "test-client-version";
-    this.appBaseUrl = process.env.APP_BASE_URL;
+    this.appBaseUrl = process.env.FRONTEND_URL;
 
     const isProd = process.env.NODE_ENV === "production";
     this.baseUrls = {
@@ -86,7 +86,7 @@ class PhonePeAPIService {
       throw err;
     }
   }
-  async generateMerchantOrderId(customerPhone, productCode = "BUNDLE") {
+  async   (customerPhone, productCode = "BUNDLE") {
     const timestamp = Date.now(); // 13-digit epoch
     const random = Math.floor(Math.random() * 9000 + 1000); // 4-digit random number
     const phoneSuffix = customerPhone.slice(-4); // last 4 digits
