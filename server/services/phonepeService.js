@@ -116,9 +116,9 @@ class PhonePeAPIService {
       baseUrl: this.baseUrls.payment,
     });
 
-    const callbackUrl = `${this.appBaseUrl}/api/phonepe/callback/${merchantTransactionId}`;
-    const redirectUrl = `${process.env.FRONTEND_URL || "https://www.thefloo.in"}/payment-status?transactionId=${merchantTransactionId}`;
-
+const callbackUrl = `${this.appBaseUrl}/api/phonepe/callback/${merchantTransactionId}`;
+const rawRedirectUrl = `${process.env.FRONTEND_URL || "https://www.thefloo.in"}/payment-status?transactionId=${merchantTransactionId}`;
+const redirectUrl = encodeURIComponent(rawRedirectUrl);
     const paymentPayload = {
       merchantTransactionId,
       merchantOrderId,
