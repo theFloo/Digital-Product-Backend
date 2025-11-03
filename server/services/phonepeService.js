@@ -95,88 +95,93 @@ class PhonePeAPIService {
 
   /** 💳 Initiate payment (v2 OAuth-based) */
   async initiatePayment(paymentData) {
-    try {
-      const {
-        amount,
-        customerPhone,
-        customerName,
-        customerEmail,
-        merchantTransactionId,
-        merchantOrderId
-      } = paymentData;
+  try {
+    const {
+      amount,
+      customerPhone,
+      customerName,
+      customerEmail,
+      merchantTransactionId,
+      merchantOrderId
+    } = paymentData;
 
-      this.validatePaymentData({ amount, customerPhone, customerName });
+    // Validate incoming fields
+    this.validatePaymentData({ amount, customerPhone, customerName });
 
-      console.log("🚀 Initiating PhonePe Payment:", {
-        merchantTransactionId,
-        merchantOrderId,
-        amount,
-        customerPhone,
-        baseUrl: this.baseUrls.payment,
-      });
+    console.log("🚀 Initiating PhonePe Payment:", {
+      merchantTransactionId,
+      merchantOrderId,
+      amount,
+      customerPhone,
+      baseUrl: this.baseUrls.payment,
+    });
 
-      const paymentPayload = {
-        merchantTransactionId,
-        merchantOrderId,
-        merchantId: this.merchantId,
-        amount: Math.round(amount * 100), // paise
-        expireAfter: 1200, // 20 mins
-        metaInfo: {
-          udf1: customerName || "NA",
-          udf2: customerEmail || "NA",
-          udf3: customerPhone || "NA",
-          udf4: "bundle-buy-bliss",
-          udf5: merchantTransactionId,
+    const callbackUrl = `${this.appBaseUrl}/api/phonepe/callback/${merchantTransactionId}`;
+    const redirectUrl = `${process.env.FRONTEND_URL || "https://www.thefloo.in"}/payment-status?transactionId=${merchantTransactionId}`;
+
+    const paymentPayload = {
+      merchantTransactionId,
+      merchantOrderId,
+      merchantId: this.merchantId,
+      amount: Math.round(amount * 100), // in paise
+      expireAfter: 1200, // 20 mins
+      metaInfo: {
+        udf1: customerName || "NA",
+        udf2: customerEmail || "NA",
+        udf3: customerPhone || "NA",
+        udf4: "bundle-buy-bliss",
+        udf5: merchantTransactionId,
+      },
+      paymentFlow: {
+        type: "PG_CHECKOUT",
+        message: "Redirecting to PhonePe",
+        merchantUrls: {
+          callbackUrl,   // ✅ backend
+          redirectUrl,   // ✅ frontend
         },
-        paymentFlow: {
-          type: "PG_CHECKOUT",
-          message: "Redirecting to PhonePe",
-          merchantUrls: {
-            redirectUrl: `${this.appBaseUrl}/api/phonepe/callback/${merchantTransactionId}`,
-          },
-        },
-      };
+      },
+    };
 
-      const accessToken = await this.getAccessToken();
-      if (!accessToken)
-        throw new Error("Access token required for PhonePe v2 payment");
+    const accessToken = await this.getAccessToken();
+    if (!accessToken) throw new Error("Access token required for PhonePe v2 payment");
 
-      const headers = {
-        "Content-Type": "application/json",
-        Authorization: `O-Bearer ${accessToken}`,
-      };
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `O-Bearer ${accessToken}`,
+    };
 
-      const apiResponse = await axios.post(
-        `${this.baseUrls.payment}/checkout/v2/pay`,
-        paymentPayload,
-        { headers, timeout: 30000 }
-      );
+    const apiResponse = await axios.post(
+      `${this.baseUrls.payment}/checkout/v2/pay`,
+      paymentPayload,
+      { headers, timeout: 30000 }
+    );
 
-      console.log("📨 PhonePe API Response:", apiResponse.data);
+    console.log("📨 PhonePe API Response:", apiResponse.data);
 
-      if (apiResponse.status === 200 && apiResponse.data?.redirectUrl) {
-        return {
-          success: true,
-          paymentUrl: apiResponse.data.redirectUrl,
-          merchantTransactionId,
-          merchantOrderId,
-          state: apiResponse.data.state,
-        };
-      }
-
-      throw new Error(apiResponse.data?.message || "Unexpected API response");
-    } catch (error) {
-      console.error("💥 Payment initiation failed:", error.message);
+    if (apiResponse.status === 200 && apiResponse.data?.redirectUrl) {
       return {
-        success: false,
-        error: this.getErrorMessage(error),
-        debug: {
-          responseData: error.response?.data,
-          statusCode: error.response?.status,
-        },
+        success: true,
+        paymentUrl: apiResponse.data.redirectUrl,
+        merchantTransactionId,
+        merchantOrderId,
+        state: apiResponse.data.state,
       };
     }
+
+    throw new Error(apiResponse.data?.message || "Unexpected API response");
+  } catch (error) {
+    console.error("💥 Payment initiation failed:", error.message);
+    return {
+      success: false,
+      error: this.getErrorMessage(error),
+      debug: {
+        responseData: error.response?.data,
+        statusCode: error.response?.status,
+      },
+    };
   }
+}
+
 
   /** 🧾 Check payment status */
   async checkPaymentStatus(merchantOrderId) {
