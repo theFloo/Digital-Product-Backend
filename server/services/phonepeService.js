@@ -94,7 +94,7 @@ class PhonePeAPIService {
   }
 
   /** 💳 Initiate payment (v2 OAuth-based) */
-  async initiatePayment(paymentData) {
+async initiatePayment(paymentData) {
   try {
     const {
       amount,
@@ -105,26 +105,28 @@ class PhonePeAPIService {
       merchantOrderId
     } = paymentData;
 
-    // Validate incoming fields
+    // 🔒 1. Validate required data
     this.validatePaymentData({ amount, customerPhone, customerName });
+
+    // 🧭 2. Use environment variables properly
+    const FRONTEND_URL = process.env.FRONTEND_URL || "https://www.thefloo.in";
+    const BACKEND_URL = process.env.BACKEND_URL || "https://api.thefloo.in";
 
     console.log("🚀 Initiating PhonePe Payment:", {
       merchantTransactionId,
       merchantOrderId,
       amount,
       customerPhone,
-      baseUrl: this.baseUrls.payment,
+      backendRedirectUrl: `${BACKEND_URL}/api/phonepe/callback/${merchantTransactionId}`,
     });
 
-const callbackUrl = `${this.appBaseUrl}/api/phonepe/callback/${merchantTransactionId}`;
-const rawRedirectUrl = `${process.env.FRONTEND_URL || "https://www.thefloo.in"}/payment-status?transactionId=${merchantTransactionId}`;
-const redirectUrl = encodeURIComponent(rawRedirectUrl);
+    // 💰 3. Construct payment payload
     const paymentPayload = {
       merchantTransactionId,
       merchantOrderId,
       merchantId: this.merchantId,
-      amount: Math.round(amount * 100), // in paise
-      expireAfter: 1200, // 20 mins
+      amount: Math.round(amount * 100), // convert to paise
+      expireAfter: 1200, // 20 minutes
       metaInfo: {
         udf1: customerName || "NA",
         udf2: customerEmail || "NA",
@@ -136,20 +138,23 @@ const redirectUrl = encodeURIComponent(rawRedirectUrl);
         type: "PG_CHECKOUT",
         message: "Redirecting to PhonePe",
         merchantUrls: {
-          callbackUrl,   // ✅ backend
-          redirectUrl,   // ✅ frontend
+          // ✅ redirect back to your backend (NOT frontend)
+          redirectUrl: `${BACKEND_URL}/api/phonepe/callback/${merchantTransactionId}`,
         },
       },
     };
 
+    // 🔑 4. Get access token
     const accessToken = await this.getAccessToken();
-    if (!accessToken) throw new Error("Access token required for PhonePe v2 payment");
+    if (!accessToken)
+      throw new Error("Access token required for PhonePe v2 payment");
 
     const headers = {
       "Content-Type": "application/json",
       Authorization: `O-Bearer ${accessToken}`,
     };
 
+    // 📡 5. Call PhonePe API
     const apiResponse = await axios.post(
       `${this.baseUrls.payment}/checkout/v2/pay`,
       paymentPayload,
@@ -158,6 +163,7 @@ const redirectUrl = encodeURIComponent(rawRedirectUrl);
 
     console.log("📨 PhonePe API Response:", apiResponse.data);
 
+    // 🧭 6. Return redirect info to frontend
     if (apiResponse.status === 200 && apiResponse.data?.redirectUrl) {
       return {
         success: true,

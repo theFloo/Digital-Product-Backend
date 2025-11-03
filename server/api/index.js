@@ -243,27 +243,90 @@ app.post("/api/phonepe/create-order", async (req, res) => {
 });
 
 // PhonePe callback
+// app.get("/api/phonepe/callback/:merchantTransactionId", async (req, res) => {
+//   try {
+//     const { merchantTransactionId } = req.params;
+//     const order = await findOrderByTransactionId(merchantTransactionId);
+//     if (!order) return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:8080"}/payment-error?error=order-not-found`);
+
+//     const statusResponse = await phonePeService.checkPaymentStatus(order.payment.merchantOrderId);
+//     const updateOrderStatus = async (updates) => await updateOrderPaymentById(order.id, { ...(order.payment || {}), ...updates });
+
+//     switch (statusResponse.state) {
+//       case "COMPLETED":
+//         await updateOrderStatus({ status: "completed", gatewayTransactionId: statusResponse.transactionId, paymentMethod: statusResponse.paymentInstrument?.type || "UPI", paidAt: new Date() });
+//         return res.redirect(`${process.env.FRONTEND_URL}/payment-success?orderId=${order.id}&transactionId=${merchantTransactionId}`);
+//       case "FAILED":
+//         await updateOrderStatus({ status: "failed", failureReason: statusResponse.error || "Payment failed" });
+//         return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?orderId=${order.id}`);
+//       default:
+//         return res.redirect(`${process.env.FRONTEND_URL}/payment-pending?orderId=${order.id}&transactionId=${merchantTransactionId}`);
+//     }
+//   } catch (error) {
+//     res.redirect(`${process.env.FRONTEND_URL || "http://localhost:8080"}/payment-error?error=callback-failed`);
+//   }
+// });
+
+
+
 app.get("/api/phonepe/callback/:merchantTransactionId", async (req, res) => {
+  const { merchantTransactionId } = req.params;
+
+  const FRONTEND_URL = process.env.FRONTEND_URL || "https://www.thefloo.in";
+
   try {
-    const { merchantTransactionId } = req.params;
+    if (!merchantTransactionId || !/^TX_|BBB_/.test(merchantTransactionId)) {
+      console.warn("⚠️ Invalid transaction ID:", merchantTransactionId);
+      return res.redirect(`${FRONTEND_URL}/payment-error?error=invalid-transaction`);
+    }
+
+    console.log("📞 PhonePe callback received:", merchantTransactionId);
+
     const order = await findOrderByTransactionId(merchantTransactionId);
-    if (!order) return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:8080"}/payment-error?error=order-not-found`);
+    if (!order) {
+      console.error("❌ Order not found for transaction:", merchantTransactionId);
+      return res.redirect(`${FRONTEND_URL}/payment-error?error=order-not-found`);
+    }
 
+    // 🔍 Fetch latest status from PhonePe
     const statusResponse = await phonePeService.checkPaymentStatus(order.payment.merchantOrderId);
-    const updateOrderStatus = async (updates) => await updateOrderPaymentById(order.id, { ...(order.payment || {}), ...updates });
+    console.log("📦 PhonePe status response:", statusResponse);
 
-    switch (statusResponse.state) {
+    const updateOrderStatus = async (updates) => {
+      await updateOrderPaymentById(order.id, { ...(order.payment || {}), ...updates });
+    };
+
+    switch (statusResponse?.state) {
       case "COMPLETED":
-        await updateOrderStatus({ status: "completed", gatewayTransactionId: statusResponse.transactionId, paymentMethod: statusResponse.paymentInstrument?.type || "UPI", paidAt: new Date() });
-        return res.redirect(`${process.env.FRONTEND_URL}/payment-success?orderId=${order.id}&transactionId=${merchantTransactionId}`);
+        await updateOrderStatus({
+          status: "completed",
+          gatewayTransactionId: statusResponse.transactionId,
+          paymentMethod: statusResponse.paymentInstrument?.type || "UPI",
+          paidAt: new Date(),
+        });
+        console.log("✅ Payment completed:", merchantTransactionId);
+        return res.redirect(`${FRONTEND_URL}/payment-success?orderId=${order.id}&transactionId=${merchantTransactionId}`);
+
       case "FAILED":
-        await updateOrderStatus({ status: "failed", failureReason: statusResponse.error || "Payment failed" });
-        return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?orderId=${order.id}`);
+        await updateOrderStatus({
+          status: "failed",
+          failureReason: statusResponse.error || "Payment failed",
+        });
+        console.warn("❌ Payment failed:", merchantTransactionId);
+        return res.redirect(`${FRONTEND_URL}/payment-failed?orderId=${order.id}`);
+
+      case "PENDING":
       default:
-        return res.redirect(`${process.env.FRONTEND_URL}/payment-pending?orderId=${order.id}&transactionId=${merchantTransactionId}`);
+        await updateOrderStatus({
+          status: "pending",
+          lastCheckedAt: new Date(),
+        });
+        console.log("⏳ Payment pending or cancelled:", merchantTransactionId);
+        return res.redirect(`${FRONTEND_URL}/payment-error?error=cancelled-or-timeout&transactionId=${merchantTransactionId}`);
     }
   } catch (error) {
-    res.redirect(`${process.env.FRONTEND_URL || "http://localhost:8080"}/payment-error?error=callback-failed`);
+    console.error("💥 Callback error:", error.message);
+    return res.redirect(`${FRONTEND_URL}/payment-error?error=callback-failed`);
   }
 });
 
