@@ -199,7 +199,7 @@ async initiatePayment(paymentData) {
 console.log(token)
       const options = {
         method: "GET",
-        url: `https://api-preprod.phonepe.com/apis/pg-sandbox/checkout/v2/order/${merchantOrderId}/status`,
+        url: `${this.baseUrls.payment}/checkout/v2/order/${merchantOrderId}/status`,
         headers: {
           "Content-Type": "application/json",
           "Authorization": `O-Bearer ${token}`, // 👈 v2 OAuth token
