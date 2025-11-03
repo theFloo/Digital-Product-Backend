@@ -14,7 +14,7 @@ class PhonePeAPIService {
       process.env.PHONEPE_CLIENT_SECRET || "test-client-secret";
     this.clientVersion =
       process.env.PHONEPE_CLIENT_VERSION || "test-client-version";
-    this.appBaseUrl = process.env.FRONTEND_URL;
+    this.appBaseUrl = process.env.APP_BASE_URL;
 
     const isProd = process.env.NODE_ENV === "production";
     this.baseUrls = {
