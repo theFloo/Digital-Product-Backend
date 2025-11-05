@@ -122,7 +122,7 @@ app.get("/api/products/:id", async (req, res) => {
 // Create new product
 app.post("/api/products", async (req ,res) => {
   try {
-    const { name, price, description, detailDescription, image, category, popular, rating, features, url } =
+    const { name, price, description, detail_description, image, category, popular, rating, features, url } =
       req.body;
 
     // Basic validation
@@ -140,7 +140,7 @@ app.post("/api/products", async (req ,res) => {
           name,
           price,
           description,
-          detailDescription,
+          detail_description,
           image,
           category,
           popular: popular ?? false,
