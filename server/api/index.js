@@ -120,23 +120,51 @@ app.get("/api/products/:id", async (req, res) => {
 });
 
 // Create new product
-app.post("/api/products", async (req, res) => {
+app.post("/api/products", async (req ,res) => {
   try {
-    const { title, description, price, image_url, category } = req.body;
+    const { name, price, description, detailDescription, image, category, popular, rating, features, url } =
+      req.body;
 
-    if (!title || !price)
-      return res.status(400).json({ success: false, message: "title and price are required" });
+    // Basic validation
+    if (!name || !price) {
+      return res.status(400).json({
+        success: false,
+        message: "Name and price are required",
+      });
+    }
 
     const { data, error } = await supabase
       .from("products")
-      .insert([{ title, description, price, image_url, category, created_at: new Date() }])
+      .insert([
+        {
+          name,
+          price,
+          description,
+          detailDescription,
+          image,
+          category,
+          popular: popular ?? false,
+          rating: rating ?? 0,
+          features: features ?? [],
+          url,
+          created_at: new Date(),
+        },
+      ])
       .select()
       .single();
 
     if (error) throw error;
-    res.status(201).json({ success: true, product: data });
+
+    res.status(201).json({
+      success: true,
+      product: data,
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error("❌ Error creating product:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Internal server error",
+    });
   }
 });
 
