@@ -10,14 +10,29 @@ import PhonePeAPIService from "../services/phonepeService.js";
 dotenv.config();
 
 const app = express();
-app.use(cors());
-// app.use(
-//   cors({
-//     origin: process.env.FRONTEND_URL || "http://localhost:3000",
-//     credentials: true,
-//     exposedHeaders: ["Content-Disposition"], // allow frontend to read filename header
-//   })
-// )
+const allowedOrigins = [
+  "https://thefloo.in",
+  "https://www.thefloo.in",
+  "http://localhost:3000",
+   "http://localhost:8080", // optional for local dev
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow no-origin requests (e.g., curl, server-side)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        console.warn(`❌ Blocked CORS request from origin: ${origin}`);
+        return callback(new Error("Not allowed by CORS"), false);
+      }
+    },
+    credentials: true, // required if you use cookies or auth headers
+    exposedHeaders: ["Content-Disposition"], // allow filename header for downloads
+  })
+);
 app.use(express.json({ limit: "10mb" }));
 app.set("trust proxy", 1);
 
