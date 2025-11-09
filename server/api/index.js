@@ -4,6 +4,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
+import cors from "cors";
+
 import { createClient } from "@supabase/supabase-js";
 import PhonePeAPIService from "../services/phonepeService.js";
 
@@ -18,6 +20,35 @@ app.use(cors());
 //     exposedHeaders: ["Content-Disposition"], // allow frontend to read filename header
 //   })
 // )
+
+
+// parse allowed origins from env (comma-separated)
+const allowedOrigins = (process.env.FRONTEND_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+// cors options that echo back the origin if it's allowed
+const corsOptions = {
+  origin: function (origin, callback) {
+    // browser will send 'null' for some non-http contexts (file://) — handle that if needed
+    if (!origin) {
+      // If you want to allow non-browser tools (curl/postman), decide policy. Here we allow.
+      return callback(null, true);
+    }
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+    return callback(new Error(msg), false);
+  },
+  credentials: true, // allow cookies/auth to be sent (important if you use sessions)
+  exposedHeaders: ["Content-Disposition"], // expose filename header to frontend
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "10mb" }));
 app.set("trust proxy", 1);
 
