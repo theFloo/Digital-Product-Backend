@@ -2,6 +2,8 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import fs from "fs";
 import { createClient } from "@supabase/supabase-js";
 import PhonePeAPIService from "../services/phonepeService.js";
 
@@ -9,6 +11,13 @@ dotenv.config();
 
 const app = express();
 app.use(cors());
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    credentials: true,
+    exposedHeaders: ["Content-Disposition"], // allow frontend to read filename header
+  })
+)
 app.use(express.json({ limit: "10mb" }));
 app.set("trust proxy", 1);
 
@@ -120,9 +129,9 @@ app.get("/api/products/:id", async (req, res) => {
 });
 
 // Create new product
-app.post("/api/products", async (req ,res) => {
+app.post("/api/products", async (req, res) => {
   try {
-    const {id, name, price, description, detail_description, image, category, popular, rating, features, url } =
+    const { id, name, price, description, detail_description, image, category, popular, rating, features, url } =
       req.body;
 
     // Basic validation
@@ -144,6 +153,7 @@ app.post("/api/products", async (req ,res) => {
           detail_description,
           image,
           category,
+          file_name: req.name.replace(/\s+/g, "_").toLowerCase() + ".pdf",
           popular: popular ?? false,
           rating: rating ?? 0,
           features: features ?? [],
@@ -202,6 +212,7 @@ app.delete("/api/products/:id", async (req, res) => {
 });
 
 
+// Get order by transaction ID
 app.get("/api/orders/:transactionId", async (req, res) => {
   try {
     const { transactionId } = req.params;
@@ -404,6 +415,115 @@ app.get("/health", async (req, res) => {
     res.json({ status: "unhealthy", error: err.message });
   }
 });
+
+
+// Add this route (place below your other routes)
+// GET /api/downloads/:productId?transactionId=TX_...
+app.get("/api/downloads/:productId", async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const transactionId = req.query.transactionId;
+
+    if (!productId) {
+      return res.status(400).json({ success: false, message: "productId required" });
+    }
+    if (!transactionId) {
+      return res.status(400).json({ success: false, message: "transactionId required" });
+    }
+
+    // 1) Find the order by transactionId (your helper)
+    const order = await findOrderByTransactionId(String(transactionId));
+    if (!order) {
+      console.warn("Order not found for transaction:", transactionId);
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    // 2) Ensure payment is completed
+    const payment = order.payment || {};
+    if (!payment.status || String(payment.status).toLowerCase() !== "completed") {
+      console.warn("Payment not completed for order:", order.id, "status:", payment.status);
+      return res.status(403).json({ success: false, message: "Payment is not completed for this order" });
+    }
+
+    // 3) Verify product included in order
+    let productIncluded = false;
+    if (Array.isArray(order.items)) {
+      productIncluded = order.items.some((it) => {
+        if (!it) return false;
+        return String(it.productId || it.product_id || it.id) === String(productId);
+      });
+    }
+    if (!productIncluded && order.product_id) {
+      productIncluded = String(order.product_id) === String(productId);
+    }
+
+    if (!productIncluded) {
+      console.warn("Product not in order:", { orderId: order.id, productId });
+      return res.status(403).json({ success: false, message: "Product not found in this order" });
+    }
+
+    // 4) Fetch product row safely (use select('*') to avoid trailing comma bugs)
+    const { data: product, error: productErr } = await supabase
+      .from("products")
+      .select("*")
+      .eq("id", productId)
+      .limit(1)
+      .single();
+
+    if (productErr || !product) {
+      console.error("Product lookup failed:", productErr?.message || "not found");
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+
+    // 5) Determine filename
+    const rawFilename = product.file_name || product.local_file_name || (product.name ? `${product.name}.pdf` : null);
+    if (!rawFilename) {
+      return res.status(400).json({ success: false, message: "No file configured for product" });
+    }
+
+    // 6) Sanitize and resolve path
+    const PRODUCTS_FOLDER = process.env.PRODUCTS_FOLDER || path.join(process.cwd(), "products");
+    const basename = path.basename(rawFilename); // remove path segments
+    const ext = path.extname(basename).toLowerCase();
+    const finalFilename = ext === ".pdf" ? basename : `${basename}.pdf`;
+    const absolutePath = path.resolve(PRODUCTS_FOLDER, finalFilename);
+
+    // ensure inside PRODUCTS_FOLDER
+    if (!absolutePath.startsWith(path.resolve(PRODUCTS_FOLDER) + path.sep)) {
+      console.error("Attempt to access file outside products folder:", absolutePath);
+      return res.status(400).json({ success: false, message: "Invalid file path" });
+    }
+
+    // 7) File existence
+    if (!fs.existsSync(absolutePath)) {
+      console.warn("File not found on disk:", absolutePath);
+      return res.status(404).json({ success: false, message: "File not found" });
+    }
+
+    // 8) Stream file with Content-Disposition header (safe filename)
+    const safeDownloadName =
+      (product.name || path.parse(finalFilename).name).replace(/[^a-z0-9_\-\. ]/gi, "_").trim() + ".pdf";
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${safeDownloadName}"; filename*=UTF-8''${encodeURIComponent(safeDownloadName)}`
+    );
+    res.setHeader("Cache-Control", "no-cache");
+
+    const stream = fs.createReadStream(absolutePath);
+    stream.on("error", (err) => {
+      console.error("File stream error:", err);
+      if (!res.headersSent) res.status(500).json({ success: false, message: "File read error" });
+    });
+    stream.pipe(res);
+  } catch (err) {
+    // log the internal error and return a controlled message
+    console.error("Authorized download error:", err?.message || err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
 
 // Start server
 const PORT = process.env.PORT || 3000;
