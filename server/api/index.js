@@ -42,7 +42,7 @@ const corsOptions = {
     const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
     return callback(new Error(msg), false);
   },
-  credentials: true, // allow cookies/auth to be sent (important if you use sessions)
+  credentials: include, // allow cookies/auth to be sent (important if you use sessions)
   exposedHeaders: ["Content-Disposition"], // expose filename header to frontend
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "Accept"],
