@@ -540,6 +540,83 @@ app.get("/api/downloads/:productId", async (req, res) => {
 });
 
 
+// GET /api/signed-download/:productId?transactionId=...
+app.get("/api/signed-download/:productId", async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const transactionId = String(req.query.transactionId || "");
+
+    if (!productId) return res.status(400).json({ success: false, message: "productId required" });
+    if (!transactionId) return res.status(400).json({ success: false, message: "transactionId required" });
+
+    // 1) validate order and payment (reuse your helper)
+    const order = await findOrderByTransactionId(transactionId);
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+    if (!order.payment || String(order.payment.status).toLowerCase() !== "completed") {
+      return res.status(403).json({ success: false, message: "Payment not completed" });
+    }
+
+    // 2) verify product included in order (same logic you have)
+    let included = false;
+    if (Array.isArray(order.items)) {
+      included = order.items.some((it) => String(it.productId || it.product_id || it.id) === String(productId));
+    }
+    if (!included && order.product_id) included = String(order.product_id) === String(productId);
+    if (!included) return res.status(403).json({ success: false, message: "Product not part of this order" });
+
+   // 3) get product row to find storage path
+const { data: product, error: prodErr } = await supabase
+  .from("products")
+  .select("id, name, storage_path, file_name")
+  .eq("id", productId)
+  .single();
+
+if (prodErr || !product) {
+  console.error("Product lookup failed:", prodErr?.message);
+  return res.status(404).json({ success: false, message: "Product not found" });
+}
+
+// ✅ storage_path = bucket, file_name = file in that bucket
+const bucket = product.storage_path || "products"; // default fallback
+const fileName = product.file_name;
+
+if (!fileName) {
+  return res.status(400).json({ success: false, message: "file_name missing for product" });
+}
+
+// ✅ join bucket and filename for Supabase path
+const filePath = `${bucket}/${fileName}`.replace(/\/+/g, "/"); // ensure no double slashes
+
+console.log("📦 Downloading from Supabase:", { bucket, fileName, filePath });
+
+// 4) create signed URL
+const expiresIn = 60; // seconds
+const { data: signedData, error: urlErr } = await supabase.storage
+  .from(bucket)
+  .createSignedUrl(fileName, expiresIn); // use only the relative filename inside the bucket
+
+if (urlErr || !signedData) {
+  console.error("Signed URL error:", urlErr);
+  return res.status(500).json({ success: false, message: "Could not create signed URL" });
+}
+
+return res.json({
+  success: true,
+  signedUrl: signedData.signedUrl,
+  fileName,
+  bucket,
+  expiresIn,
+});
+    // Option A: redirect client to signedURL (browser will download/open it)
+    // return res.redirect(signedURL);
+
+    // Option B: return JSON with signed URL (frontend will download it)
+  } catch (err) {
+    console.error("Signed download error:", err);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
