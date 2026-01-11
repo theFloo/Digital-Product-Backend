@@ -11,8 +11,8 @@ dotenv.config();
 
 const app = express();
 const allowedOrigins = [
-  "https://thefloo.in",
-  "https://www.thefloo.in",
+  "https://thefloo.shop",
+  "https://www.thefloo.shop",
   "http://localhost:3000",
    "http://localhost:8080", // optional for local dev
 ];
@@ -327,7 +327,7 @@ app.post("/api/phonepe/create-order", async (req, res) => {
 app.get("/api/phonepe/callback/:merchantTransactionId", async (req, res) => {
   const { merchantTransactionId } = req.params;
 
-  const FRONTEND_URL = process.env.FRONTEND_URL || "https://www.thefloo.in";
+  const FRONTEND_URL = process.env.FRONTEND_URL || "https://www.thefloo.shop";
 
   try {
     if (!merchantTransactionId || !/^TX_|BBB_/.test(merchantTransactionId)) {
