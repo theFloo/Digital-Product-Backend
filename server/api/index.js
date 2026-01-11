@@ -114,9 +114,13 @@ function generateMerchantOrderId(customerPhone, productCode = "BUNDLE") {
 
 // --- Routes ---
 app.get("/", (req, res) => {
-  res.json({ message: "API running", timestamp: new Date().toISOString() });
+  res.json({ message: "backend running", timestamp: new Date().toISOString() });
 });
 
+
+app.get("/api", (req, res) => {
+  res.json({ message: "API endpoint running", timestamp: new Date().toISOString() });
+});
 // Products
 // --- PRODUCTS CRUD --- //
 

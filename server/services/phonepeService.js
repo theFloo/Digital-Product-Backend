@@ -109,8 +109,8 @@ async initiatePayment(paymentData) {
     this.validatePaymentData({ amount, customerPhone, customerName });
 
     // 🧭 2. Use environment variables properly
-    const FRONTEND_URL = process.env.FRONTEND_URL || "https://www.thefloo.in";
-    const BACKEND_URL = process.env.BACKEND_URL || "https://api.thefloo.in";
+    const FRONTEND_URL = process.env.FRONTEND_URL || "https://www.thefloo.shop";
+    const BACKEND_URL = process.env.BACKEND_URL || "https://api.thefloo.shop";
 
     console.log("🚀 Initiating PhonePe Payment:", {
       merchantTransactionId,
