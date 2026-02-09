@@ -24,7 +24,11 @@ app.use(express.json({ limit: "10mb" }));
 // ============================================================
 // CORS Configuration
 // ============================================================
-const allowedOrigins = ["https://thefloo.online", process.env.FRONTEND_URL].filter(Boolean);
+const allowedOrigins = [
+  "https://www.thefloo.online",
+  "https://thefloo.online",
+  "http://localhost:3000",
+];
 app.use(
   cors({
     origin(origin, callback) {
