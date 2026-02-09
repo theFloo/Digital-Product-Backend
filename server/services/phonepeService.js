@@ -15,8 +15,8 @@ class PhonePeAPIService {
     this.clientVersion =
       process.env.PHONEPE_CLIENT_VERSION || "test-client-version";
     this.appBaseUrl = process.env.APP_BASE_URL;
-
     const isProd = process.env.NODE_ENV === "production";
+    console.log(isProd)
     this.baseUrls = {
       auth: isProd
         ? "https://api.phonepe.com/apis/identity-manager"
@@ -94,6 +94,100 @@ class PhonePeAPIService {
   }
 
   /** 💳 Initiate payment (v2 OAuth-based) */
+// async initiatePayment(paymentData) {
+//   try {
+//     const {
+//       amount,
+//       customerPhone,
+//       customerName,
+//       customerEmail,
+//       merchantTransactionId,
+//       merchantOrderId
+//     } = paymentData;
+
+//     // 🔒 1. Validate required data
+//     this.validatePaymentData({ amount, customerPhone, customerName });
+
+//     // 🧭 2. Use environment variables properly
+//     const FRONTEND_URL = process.env.FRONTEND_URL || "https://www.thefloo.in";
+//     const BACKEND_URL = process.env.BACKEND_URL || "https://api.thefloo.in";
+
+//     console.log("🚀 Initiating PhonePe Payment:", {
+//       merchantTransactionId,
+//       merchantOrderId,
+//       amount,
+//       customerPhone,
+//       backendRedirectUrl: `${BACKEND_URL}/api/phonepe/callback/${merchantTransactionId}`,
+//     });
+
+//     // 💰 3. Construct payment payload
+//     const paymentPayload = {
+//       merchantTransactionId,
+//       merchantOrderId,
+//       merchantId: this.merchantId,
+//       amount: Math.round(amount * 100), // convert to paise
+//       expireAfter: 1200, // 20 minutes
+//       metaInfo: {
+//         udf1: customerName || "NA",
+//         udf2: customerEmail || "NA",
+//         udf3: customerPhone || "NA",
+//         udf4: "bundle-buy-bliss",
+//         udf5: merchantTransactionId,
+//       },
+//       paymentFlow: {
+//         type: "PG_CHECKOUT",
+//         message: "Redirecting to PhonePe",
+//         merchantUrls: {
+//           // ✅ redirect back to your backend (NOT frontend)
+//           redirectUrl: `${BACKEND_URL}/api/phonepe/callback/${merchantTransactionId}`,
+//         },
+//       },
+//     };
+
+//     // 🔑 4. Get access token
+//     const accessToken = await this.getAccessToken();
+//     if (!accessToken)
+//       throw new Error("Access token required for PhonePe v2 payment");
+
+//     const headers = {
+//       "Content-Type": "application/json",
+//       Authorization: `O-Bearer ${accessToken}`,
+//     };
+
+//     // 📡 5. Call PhonePe API
+//     const apiResponse = await axios.post(
+//       `${this.baseUrls.payment}/checkout/v2/pay`,
+//       paymentPayload,
+//       { headers, timeout: 30000 }
+//     );
+
+//     console.log("📨 PhonePe API Response:", apiResponse.data);
+
+//     // 🧭 6. Return redirect info to frontend
+//     if (apiResponse.status === 200 && apiResponse.data?.redirectUrl) {
+//       return {
+//         success: true,
+//         paymentUrl: apiResponse.data.redirectUrl,
+//         merchantTransactionId,
+//         merchantOrderId,
+//         state: apiResponse.data.state,
+//       };
+//     }
+
+//     throw new Error(apiResponse.data?.message || "Unexpected API response");
+//   } catch (error) {
+//     console.error("💥 Payment initiation failed:", error.message);
+//     return {
+//       success: false,
+//       error: this.getErrorMessage(error),
+//       debug: {
+//         responseData: error.response?.data,
+//         statusCode: error.response?.status,
+//       },
+//     };
+//   }
+// }
+
 async initiatePayment(paymentData) {
   try {
     const {
@@ -101,93 +195,155 @@ async initiatePayment(paymentData) {
       customerPhone,
       customerName,
       customerEmail,
-      merchantTransactionId,
-      merchantOrderId
+      merchantOrderId,
     } = paymentData;
 
-    // 🔒 1. Validate required data
-    this.validatePaymentData({ amount, customerPhone, customerName });
+    // 🔒 1. Validate required fields
+    if (!amount || !merchantOrderId) {
+      throw new Error("amount and merchantOrderId are mandatory");
+    }
 
-    // 🧭 2. Use environment variables properly
-    const FRONTEND_URL = process.env.FRONTEND_URL || "https://www.thefloo.shop";
-    const BACKEND_URL = process.env.BACKEND_URL || "https://api.thefloo.shop";
+    const BACKEND_URL =
+      process.env.BACKEND_URL || "https://api.thefloo.in";
 
-    console.log("🚀 Initiating PhonePe Payment:", {
-      merchantTransactionId,
+    console.log("🚀 Initiating PhonePe PG Checkout v2", {
       merchantOrderId,
       amount,
-      customerPhone,
-      backendRedirectUrl: `${BACKEND_URL}/api/phonepe/callback/${merchantTransactionId}`,
     });
 
-    // 💰 3. Construct payment payload
+    // 💰 2. Construct payload as per PhonePe v2 spec
     const paymentPayload = {
-      merchantTransactionId,
-      merchantOrderId,
-      merchantId: this.merchantId,
-      amount: Math.round(amount * 100), // convert to paise
-      expireAfter: 1200, // 20 minutes
+      merchantOrderId, // ✅ REQUIRED
+      amount: Math.round(amount * 100), // ✅ paisa
+      expireAfter: 1200, // optional (20 mins)
       metaInfo: {
         udf1: customerName || "NA",
         udf2: customerEmail || "NA",
         udf3: customerPhone || "NA",
         udf4: "bundle-buy-bliss",
-        udf5: merchantTransactionId,
       },
       paymentFlow: {
         type: "PG_CHECKOUT",
-        message: "Redirecting to PhonePe",
+        message: "Redirecting to PhonePe Checkout",
         merchantUrls: {
-          // ✅ redirect back to your backend (NOT frontend)
-          redirectUrl: `${BACKEND_URL}/api/phonepe/callback/${merchantTransactionId}`,
+          redirectUrl: `${BACKEND_URL}/api/phonepe/callback/${merchantOrderId}`,
         },
       },
     };
 
-    // 🔑 4. Get access token
+    // 🔑 3. Get OAuth token
     const accessToken = await this.getAccessToken();
-    if (!accessToken)
-      throw new Error("Access token required for PhonePe v2 payment");
+    if (!accessToken) {
+      throw new Error("PhonePe access token missing");
+    }
 
     const headers = {
       "Content-Type": "application/json",
       Authorization: `O-Bearer ${accessToken}`,
     };
 
-    // 📡 5. Call PhonePe API
-    const apiResponse = await axios.post(
+    // 📡 4. Call PhonePe API
+    const response = await axios.post(
       `${this.baseUrls.payment}/checkout/v2/pay`,
       paymentPayload,
-      { headers, timeout: 30000 }
+      {
+        headers,
+        timeout: 30000,
+      }
     );
 
-    console.log("📨 PhonePe API Response:", apiResponse.data);
+    console.log("📨 PhonePe Response:", response.data);
 
-    // 🧭 6. Return redirect info to frontend
-    if (apiResponse.status === 200 && apiResponse.data?.redirectUrl) {
+    /**
+     * PhonePe v2 response structure typically contains:
+     * response.data.data.redirectUrl
+     */
+    const redirectUrl = response.data?.redirectUrl;
+
+    if (response.status === 200 && redirectUrl) {
       return {
         success: true,
-        paymentUrl: apiResponse.data.redirectUrl,
-        merchantTransactionId,
+        paymentUrl: redirectUrl,
         merchantOrderId,
-        state: apiResponse.data.state,
       };
     }
 
-    throw new Error(apiResponse.data?.message || "Unexpected API response");
+    throw new Error(
+      response.data?.message || "Invalid PhonePe response"
+    );
   } catch (error) {
-    console.error("💥 Payment initiation failed:", error.message);
+    console.error("💥 PhonePe Payment Init Failed:", error.message);
+
     return {
       success: false,
-      error: this.getErrorMessage(error),
+      error: error.message,
       debug: {
-        responseData: error.response?.data,
         statusCode: error.response?.status,
+        responseData: error.response?.data,
       },
     };
   }
 }
 
+async  verifyPayment(merchantOrderId) {
+  try {
+    if (!merchantOrderId) {
+      throw new Error('merchantOrderId is required');
+    }
+
+    // 1️⃣ Get OAuth token
+    const accessToken = await this.getAccessToken(); // your existing function
+    if (!accessToken) {
+      throw new Error('PhonePe access token missing');
+    }
+
+    // 2️⃣ Call PhonePe Status API
+    const response = await axios.get(
+      `${this.baseUrls.payment}/checkout/v2/order/${merchantOrderId}/status`,
+      {
+        headers: {
+          Authorization: `O-Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          "X-MERCHANT-ID": process.env.PHONEPE_MERCHANT_ID, 
+        },
+        timeout: 20000,
+      }
+    );
+
+    const data = response.data;
+
+    /*
+      Expected data shape:
+      {
+        merchantOrderId,
+        state: "COMPLETED",
+        amount,
+        responseCode: "SUCCESS",
+        paymentDetails: [...]
+      }
+    */
+
+    // 3️⃣ Final decision (SOURCE OF TRUTH)
+    const isSuccess =
+      data?.state === 'COMPLETED' ;
+
+    return {
+      success: isSuccess,
+      state: data?.state,
+      responseCode: data?.responseCode,
+      transactionId: data?.transactionId || null,
+      paymentDetails: data?.paymentDetails || [],
+      raw: data,
+    };
+  } catch (error) {
+    console.error('❌ PhonePe verifyPayment error:', error.response?.data || error.message);
+
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
 
   /** 🧾 Check payment status */
   async checkPaymentStatus(merchantOrderId) {
